@@ -1,11 +1,9 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(MyCadicalProject)
+project(Proofsys)
 
 set(CMAKE_CXX_STANDARD 17)
 
-add_subdirectory(cadical)
+target_include_directories(main PRIVATE cadical/src)
 
-add_executable(main main.cpp)
-
-target_link_libraries(main cadical)
+target_link_libraries(main ${CMAKE_SOURCE_DIR}/cadical/build/libcadical.a)
