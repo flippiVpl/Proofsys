@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <deque>
+#include <queue>
 #include <algorithm>
 #include <cstdlib>
 #include <cstdint>
@@ -408,32 +409,47 @@ bool apply_caching( int                                     node,
 
 
 // Help function II for proof_system
-std::vector<std::vector<int>> unit_propagation( const std::vector<std::vector<int>>&    i_cnf,
-                                                int                                     i_lit )
-{
-    std::vector<std::vector<int>> o_cnf;
+std::vector<std::vector<int>> unit_propagation(  std::vector<std::vector<int>>& cnf,
+                        int                            i_lit ) {
+    std::queue<int> unitQueue;
+    unitQueue.push( i_lit );
 
-    for( const auto& clause : i_cnf ) {
-        bool satisfied = false;
-        std::vector<int> new_clause;
+    while( !unitQueue.empty() ) {
+        int l_lit = unitQueue.front();
+        unitQueue.pop();
 
-        for( int l : clause ) {
-            if( l == i_lit ) {
-                satisfied = true;
-                break;
+        for( size_t i = 0; i < cnf.size(); i++ ) {
+            auto& clause = cnf[i];
+
+            // Case 1: literal in clause
+            if( std::find( clause.begin(), clause.end(), l_lit ) != clause.end() ) {
+                cnf.erase( cnf.begin() + i );
+                i--;
+                continue;
             }
-            if( l != -i_lit )
-                new_clause.push_back( l );
+
+            // Case 2: negation in clause
+            auto it = std::remove( clause.begin(), clause.end(), -l_lit );
+            if( it != clause.end() ) {
+                clause.erase( it, clause.end() );
+
+                // Contradiction?
+                if( clause.size() == 0 ) {
+                    cnf.clear();
+                    cnf.push_back({});
+                    return cnf;
+                }
+
+                // New unit clause?
+                if( clause.size() == 1 ) {
+                    unitQueue.push( clause[0] );
+                }
+
+            }
+
         }
-        
-        if( satisfied ) continue;
-        if( new_clause.empty() )
-            return {{}};
-
-        o_cnf.push_back( new_clause );
     }
-
-    return o_cnf;
+    return cnf;
 }
 
 
