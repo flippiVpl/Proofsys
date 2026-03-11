@@ -513,6 +513,15 @@ bool proof_system(  int                             i_root,
                     std::unordered_map<int, Node>&  nodes )
 {
     Node& l_root = nodes[i_root];
+    
+    // Check input for unit clauses once, then only reduced claused will be checked again
+    for( auto& clause : l_root.label ) {
+        if( clause.size() == 1 ) {
+            l_root.label = unit_propagation( l_root.label, clause[0] );
+            break;
+        }
+    }
+    
     if( l_root.type == Node::DEC ) {        
         int high = l_root.high;
         int low = l_root.low;
