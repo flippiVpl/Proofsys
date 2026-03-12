@@ -30,7 +30,7 @@ VarSet empty_varset() {
 
 void add_var( VarSet& vars, int v ) {
     if( v <= 0 || v > MAX_VAR )
-        error( "Invalid var for bitset: " + v );
+        error( "Invalid var for bitset: " + std::to_string( v ) );
     int bit = v - 1;
     int word = bit / 64;
     int offset = bit % 64;
@@ -133,7 +133,7 @@ std::vector<Arc> filter_arcs(   std::vector<Arc>    i_arcs,
                 {
                     // Case 1: Literal in arch -> erase
                     if( lit ==  var )
-                    return true;
+                        return true;
 
                     // Case 2: Negation in arch -> erase whole arch
                     if( lit == -var ) {
@@ -167,7 +167,7 @@ void build_subtree( int                             root,
 {
     auto it = nodes.find( root );
     if( it == nodes.end() )
-        error( "Node has an undefined child: " + root);
+        error( "Node has an undefined child: " + std::to_string( root ) );
     Node& node = it->second;
 
     if( vars.empty() ) {
@@ -220,7 +220,7 @@ VarSet derive_vars( int root, std::unordered_map<int, Node>& nodes ) {
     
     auto it = nodes.find( root );
     if( it == nodes.end() )
-        error( "Note has an undefined child: " + root);
+        error( "Node has an undefined child: " + std::to_string( root ) );
     Node& node = it->second;
 
     if( node.vars_are_set ) return node.vars;
