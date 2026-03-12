@@ -79,10 +79,15 @@ std::string to_string( cnf form ) {
     return stream.str();
 }
 
+void normalize_cnf( cnf& form ) {
+    std::sort( form.begin(), form.end() );
+    form.erase( std::unique( form.begin(), form.end() ), form.end() );
+}
+
 /**
      Parse a line of a cnf-File into a vector of literals.
      @param line, a string that represents a cnf clause.
-     \return a vector of integers.
+     \return a vector of integers that is sorted and does not contain dublicates.
   */
 std::vector<int> parse_clause( std::string& line ) {
     std::vector<int> clause;
@@ -93,6 +98,8 @@ std::vector<int> parse_clause( std::string& line ) {
         clause.push_back( lit );
         MAX_VAR = std::max( MAX_VAR, std::abs( lit ) );
     }
+    std::sort( clause.begin(), clause.end() );
+    clause.erase( std::unique( clause.begin(), clause.end() ), clause.end() );
     return clause;
 }
 
@@ -450,6 +457,7 @@ cnf unit_propagation(   cnf form,
 
         }
     }
+    normalize_cnf( form );
     return form;
 }
 
@@ -514,7 +522,7 @@ bool proof_system(  int                             i_root,
                     std::unordered_map<int, Node>&  nodes )
 {
     Node& l_root = nodes[i_root];
-    cnf l_label = l_root.label;
+    cnf& l_label = l_root.label;
     
     // Check input for unit clauses once, then only reduced claused will be checked again
     for( auto& clause : l_label ) {
@@ -523,6 +531,7 @@ bool proof_system(  int                             i_root,
             break;
         }
     }
+    normalize_cnf( l_label );
     
     if( l_root.type == Node::DEC ) {        
         int high = l_root.high;
