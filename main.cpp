@@ -111,6 +111,8 @@ std::vector<int> parse_clause( std::string& line ) {
   */
 bool unsat( const cnf& form ) {
     CaDiCaL::Solver solver;
+    solver.set("factor", 0);
+    solver.set("factorcheck", 0);
 
     for( auto& clause : form ) {
         for( int lit : clause ) {
