@@ -4,7 +4,6 @@
 #include <vector>
 #include <sstream>
 #include <unordered_map>
-#include <unordered_set>
 #include <deque>
 #include <queue>
 #include <algorithm>
@@ -18,6 +17,7 @@
 using VarSet = std::vector<uint64_t>;
 int MAX_VAR = 0;
 int MAX_ID = 0;
+typedef std::vector<std::vector<int>> cnf;
 
 void error( std::string line ) {
     std::cerr << line << std::endl;
@@ -54,23 +54,23 @@ struct Node {
     
     // CORE OF THE PROOF SYSTEM: Labelling each node with
     // a CNF which meets the requirements (i)-(vi)
-    std::vector<std::vector<int>> label;
+    cnf label;
 
     // Varset to compute vars of the subformula + flag if Varset has been setup
     VarSet vars;
     bool vars_are_set = false;
 };
 
-// Representation of the D4 specific arches
+// Representation of the D4 specific arcs
 // Auxiliary for the parse_nodes function
 struct Arc {
     int dst;
     std::vector<int> lits;
 };
 
-std::string to_string( std::vector<std::vector<int>> i_cnf ) {
+std::string to_string( cnf form ) {
     std::stringstream stream;
-    for( auto& clause : i_cnf ) {
+    for( auto& clause : form ) {
         for( auto& lit : clause ) {
             stream << lit << " ";
         }
@@ -102,10 +102,10 @@ std::vector<int> parse_clause( std::string& line ) {
      @param cnf, a cnf.
      \return true if unsatisfiable, false if satisfiable.
   */
-bool unsat( const std::vector<std::vector<int>>& cnf ) {
+bool unsat( const cnf& form ) {
     CaDiCaL::Solver solver;
 
-    for( auto& clause : cnf ) {
+    for( auto& clause : form ) {
         for( int lit : clause ) {
             solver.add( lit );
         }
@@ -167,7 +167,7 @@ void build_subtree( int                             root,
 {
     auto it = nodes.find( root );
     if( it == nodes.end() )
-        error( "Note has an undefined child: " + root);
+        error( "Node has an undefined child: " + root);
     Node& node = it->second;
 
     if( vars.empty() ) {
@@ -186,7 +186,7 @@ void build_subtree( int                             root,
 
     if( arcs_high.empty() ) {
         node.high = false_node;
-    } else if( arcs_high.size() == 1 && arcs_high[0].lits.empty() ) { //DISKUTABEL, ob size=1 Abfrage notwendig
+    } else if( arcs_high.size() == 1 && arcs_high[0].lits.empty() ) {
         node.high = arcs_high[0].dst;
     } else {
         Node new_high;
@@ -380,9 +380,10 @@ int parse_nodes(    std::vector<std::string>&       lines,
      @param nodes, unordered map of nodes.
      \return boolean value: true: No caching; false: caching succesful (-> no need to recurse)
   */
-bool apply_caching( int                                     node,
-                    const std::vector<std::vector<int>>&    i_label,
-                    std::unordered_map<int, Node>&          nodes ) {
+bool apply_caching( int                             node,
+                    const cnf&                      i_label,
+                    std::unordered_map<int, Node>&  nodes ) {
+
     auto& l_node = nodes[node];
     auto& l_label = l_node.label;
 
@@ -409,8 +410,8 @@ bool apply_caching( int                                     node,
 
 
 // Help function II for proof_system
-std::vector<std::vector<int>> unit_propagation(  std::vector<std::vector<int>>& cnf,
-                        int                            i_lit ) {
+cnf unit_propagation(   cnf form,
+                        int i_lit ) {
     std::queue<int> unitQueue;
     unitQueue.push( i_lit );
 
@@ -418,12 +419,12 @@ std::vector<std::vector<int>> unit_propagation(  std::vector<std::vector<int>>& 
         int l_lit = unitQueue.front();
         unitQueue.pop();
 
-        for( size_t i = 0; i < cnf.size(); i++ ) {
-            auto& clause = cnf[i];
+        for( size_t i = 0; i < form.size(); i++ ) {
+            auto& clause = form[i];
 
             // Case 1: literal in clause
             if( std::find( clause.begin(), clause.end(), l_lit ) != clause.end() ) {
-                cnf.erase( cnf.begin() + i );
+                form.erase( form.begin() + i );
                 i--;
                 continue;
             }
@@ -435,9 +436,9 @@ std::vector<std::vector<int>> unit_propagation(  std::vector<std::vector<int>>& 
 
                 // Contradiction?
                 if( clause.size() == 0 ) {
-                    cnf.clear();
-                    cnf.push_back({});
-                    return cnf;
+                    form.clear();
+                    form.push_back({});
+                    return form;
                 }
 
                 // New unit clause?
@@ -449,7 +450,7 @@ std::vector<std::vector<int>> unit_propagation(  std::vector<std::vector<int>>& 
 
         }
     }
-    return cnf;
+    return form;
 }
 
 
@@ -472,9 +473,9 @@ bool clause_intersects_vars(    const std::vector<int>& clause,
     return false;
 }
 
-void extract_component( const std::vector<std::vector<int>>& i_label,
+void extract_component( const cnf& i_label,
                         VarSet& vars,
-                        std::vector<std::vector<int>>& o_label,
+                        cnf& o_label,
                         std::vector<bool>& used )
 {
     bool changed = true;
@@ -513,11 +514,12 @@ bool proof_system(  int                             i_root,
                     std::unordered_map<int, Node>&  nodes )
 {
     Node& l_root = nodes[i_root];
+    cnf l_label = l_root.label;
     
     // Check input for unit clauses once, then only reduced claused will be checked again
-    for( auto& clause : l_root.label ) {
+    for( auto& clause : l_label ) {
         if( clause.size() == 1 ) {
-            l_root.label = unit_propagation( l_root.label, clause[0] );
+            l_label = unit_propagation( l_label, clause[0] );
             break;
         }
     }
@@ -528,7 +530,7 @@ bool proof_system(  int                             i_root,
 
         if( l_root.var == 0 ) {
             if( high == low ) { // D4 algorithm sets root as a decision note with no literals
-                nodes[high].label = l_root.label;
+                nodes[high].label = l_label;
                 return proof_system( high, nodes );
             } else error( "Decision node with no variable, but children " + 
                             std::to_string( low ) + " and " + std::to_string( high ) );
@@ -536,10 +538,10 @@ bool proof_system(  int                             i_root,
 
         // Condition v
         bool high_recurse = apply_caching(  high,
-                                            unit_propagation( l_root.label,  l_root.var ),
+                                            unit_propagation( l_label,  l_root.var ),
                                             nodes );
         bool low_recurse = apply_caching(   low,
-                                            unit_propagation( l_root.label,  -l_root.var ),
+                                            unit_propagation( l_label,  -l_root.var ),
                                             nodes );
         
         // Condition ii
@@ -553,11 +555,11 @@ bool proof_system(  int                             i_root,
     }
 
     else if( l_root.type == Node::AND ) {
-        const auto& parent_label = l_root.label;
-        std::vector<bool> used( l_root.label.size(), false );
+        const auto& parent_label = l_label;
+        std::vector<bool> used( l_label.size(), false );
 
         for( int child : l_root.children ) {
-            extract_component(  l_root.label,
+            extract_component(  l_label,
                                 nodes[child].vars,
                                 nodes[child].label, 
                                 used );
@@ -600,13 +602,13 @@ bool proof_system(  int                             i_root,
     }
 
     else if( l_root.type == Node::ONE ) {
-        if( !l_root.label.empty() )
+        if( !l_label.empty() )
             error( "True node not satisfied: ID: " + std::to_string( i_root ) + ", clauses: \n" + to_string( l_root.label ) );
         return true;
     }
 
     else if( l_root.type == Node::ZERO ) {
-        if( l_root.label.size() == 1 && l_root.label[0].empty() ) return false;
+        if( l_label.size() == 1 && l_label[0].empty() ) return false;
         error( "False node satisfiable: ID: " + std::to_string( i_root ) + ", clauses: \n" + to_string( l_root.label ) );
     }
     return false;
@@ -627,7 +629,7 @@ int main( int argc,  char **argv )
     }
 
     std::vector<std::string> lines;
-    std::vector<std::vector<int>> cnf;
+    cnf cnf;
     std::unordered_map<int, Node> nodes;
     int root;
     std::string line;
