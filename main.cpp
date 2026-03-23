@@ -525,7 +525,6 @@ bool proof_system(  int                             i_root,
 {
     Node& l_root = nodes[i_root];
     cnf& l_label = l_root.label;
-    
     // Check input for unit clauses once, then only reduced claused will be checked again
     for( auto& clause : l_label ) {
         if( clause.size() == 1 ) {
@@ -620,7 +619,10 @@ bool proof_system(  int                             i_root,
 
     else if( l_root.type == Node::ZERO ) {
         if( l_label.size() == 1 && l_label[0].empty() ) return false;
-        error( "False node satisfiable: ID: " + std::to_string( i_root ) + ", clauses: \n" + to_string( l_root.label ) );
+        if( !unsat( l_label ) ) {
+                error( "Label satisfiable at false node: " + std::to_string( i_root ) + 
+                        "\nWith clauses: " + to_string( l_label ) );
+        }
     }
     return false;
 }
