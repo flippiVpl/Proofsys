@@ -5,7 +5,6 @@
 #include <sstream>
 #include <unordered_map>
 #include <deque>
-#include <queue>
 #include <algorithm>
 #include <cstdlib>
 #include <cstdint>
@@ -77,11 +76,6 @@ std::string to_string( cnf form ) {
         stream << std::endl;
     }
     return stream.str();
-}
-
-void normalize_cnf( cnf& form ) {
-    std::sort( form.begin(), form.end() );
-    form.erase( std::unique( form.begin(), form.end() ), form.end() );
 }
 
 /**
@@ -169,23 +163,18 @@ std::vector<Arc> filter_arcs(   std::vector<Arc>    i_arcs,
     -)If all literals of an arch are satisfied -> Connect node to arch.dst
 */
 void build_subtree( int                             root,
-                    std::deque<int>                 vars,
                     std::unordered_map<int, Node>&  nodes,
                     std::vector<Arc>&               arcs,
                     int                             false_node )
 {
-    auto it = nodes.find( root );
-    if( it == nodes.end() )
-        error( "Node has an undefined child: " + std::to_string( root ) );
-    Node& node = it->second;
+    Node& node = nodes[root];
 
-    if( vars.empty() ) {
+    if( arcs.size() == 1 && arcs[0].lits.empty() ) {
         node.high = node.low = arcs[0].dst;
         return;
     }
     
-    int var = vars.front();
-    vars.pop_front();
+    int var = abs(arcs[0].lits[0]);
 
     node.var = var;
     node.type = Node::DEC;
@@ -202,7 +191,7 @@ void build_subtree( int                             root,
         nodes[++MAX_ID] = std::move( new_high );
         node.high = MAX_ID;
 
-        build_subtree( MAX_ID, vars, nodes, arcs_high, false_node );
+        build_subtree( MAX_ID, nodes, arcs_high, false_node );
     }
 
 
@@ -218,7 +207,7 @@ void build_subtree( int                             root,
         nodes[++MAX_ID] = std::move( new_low );
         node.low = MAX_ID;
 
-        build_subtree( MAX_ID, vars, nodes, arcs_low, false_node );
+        build_subtree( MAX_ID, nodes, arcs_low, false_node );
     }
 }
 
@@ -345,29 +334,8 @@ int parse_nodes(    std::vector<std::string>&       lines,
                 src.children.push_back( arc.dst );
             continue;
         }
-
-        // To reduce the number of nodes: Count variable occurences, then sort
-        std::unordered_map<int, int> freq;
-        for( auto& arc : arcList ) {
-            for( int lit : arc.lits )
-                freq[std::abs( lit )]++;
-        }
-
-        // Unordered list cannot be sorted -> ordered vector of pairs
-        std::vector<std::pair<int,int>> freqPairs( freq.begin(), freq.end() );
-        std::sort(  freqPairs.begin(),
-                    freqPairs.end(),
-                    []( auto const& a, auto const& b )
-                    {return a.second > b.second;});
-
-        std::deque<int> vars;
-
-        for( auto& [key, _] : freqPairs )
-            vars.push_back( key );
-
         
         build_subtree(  srcID,
-                        vars,
                         nodes,
                         arcList,
                         false_node );
@@ -420,46 +388,31 @@ bool apply_caching( int                             node,
 
 // Help function II for proof_system
 cnf unit_propagation(   cnf form,
-                        int i_lit ) {
-    std::queue<int> unitQueue;
-    unitQueue.push( i_lit );
+                        int lit ) {
+    
+    for( size_t i = 0; i < form.size(); i++ ) {
+        auto& clause = form[i];
 
-    while( !unitQueue.empty() ) {
-        int l_lit = unitQueue.front();
-        unitQueue.pop();
-
-        for( size_t i = 0; i < form.size(); i++ ) {
-            auto& clause = form[i];
-
-            // Case 1: literal in clause
-            if( std::find( clause.begin(), clause.end(), l_lit ) != clause.end() ) {
-                form.erase( form.begin() + i );
-                i--;
-                continue;
-            }
-
-            // Case 2: negation in clause
-            auto it = std::remove( clause.begin(), clause.end(), -l_lit );
-            if( it != clause.end() ) {
-                clause.erase( it, clause.end() );
-
-                // Contradiction?
-                if( clause.size() == 0 ) {
-                    form.clear();
-                    form.push_back({});
-                    return form;
-                }
-
-                // New unit clause?
-                if( clause.size() == 1 ) {
-                    unitQueue.push( clause[0] );
-                }
-
-            }
-
+        // Case 1: literal in clause
+        if( std::find( clause.begin(), clause.end(), lit ) != clause.end() ) {
+            form.erase( form.begin() + i );
+            i--;
+            continue;
         }
+
+        // Case 2: negation in clause
+        clause.erase( std::remove( clause.begin(), clause.end(), -lit ),
+                clause.end()
+        );
+
+        // If Case 2, Contradiction created?
+        if( clause.empty() ) {
+            return cnf{ {} };
+        }
+
     }
-    normalize_cnf( form );
+    std::sort( form.begin(), form.end() );
+    form.erase( std::unique( form.begin(), form.end() ), form.end() );
     return form;
 }
 
@@ -525,14 +478,10 @@ bool proof_system(  int                             i_root,
 {
     Node& l_root = nodes[i_root];
     cnf& l_label = l_root.label;
-    // Check input for unit clauses once, then only reduced claused will be checked again
-    for( auto& clause : l_label ) {
-        if( clause.size() == 1 ) {
-            l_label = unit_propagation( l_label, clause[0] );
-            break;
-        }
-    }
-    normalize_cnf( l_label );
+    
+    // Sort cnf topologically and erase dublicate clauses
+    std::sort( l_label.begin(), l_label.end() );
+    l_label.erase( std::unique( l_label.begin(), l_label.end() ), l_label.end() );
     
     if( l_root.type == Node::DEC ) {        
         int high = l_root.high;
@@ -576,9 +525,22 @@ bool proof_system(  int                             i_root,
         }
 
         // Check that all clauses of the parent label have been assigned
-        for( bool u : used ) {
-            if( !u )
-                error( "AND-node: clause not assigned to any child: " + std::to_string( i_root ) );
+        for( int i = 0; i < used.size(); i++ ) {
+            if( !used[i] ) {
+                std::cerr << "Clause at and-node not assigned at: " << i_root << std::endl;
+                std::cerr << "Clause: ";
+                for( auto& lit: l_label[i]) {
+                    std::cerr << lit << " ";
+                }
+                std::cerr << std::endl << "With mother label: " << to_string( l_root.label ) << std::endl;
+                std::cerr << "Unsatisfied: " << (l_root.label.size() == 1 && l_root.label[0].size() == 0) << std::endl;
+                std::cerr << std::endl << "With children labels: " << std::endl;
+                for( int i=0; i < l_root.children.size(); i++ ) {
+                    std::cerr << "child " << i+1 << " :" << std::endl;
+                    std::cerr << to_string( nodes[l_root.children[i]].label );
+                }
+                error( "Terminating" );
+            }
         }
 
         // Check that childrens' labels are in pairs disjunctive
