@@ -132,6 +132,7 @@ bool taut( const cnf& form ) {
     for( auto& clause : form ) {
         for( auto& lit : clause ) {
             solver.add( -lit );
+            solver.add( 0 );
         }
     }
 
