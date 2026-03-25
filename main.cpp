@@ -4,7 +4,6 @@
 #include <vector>
 #include <sstream>
 #include <unordered_map>
-#include <deque>
 #include <algorithm>
 #include <cstdlib>
 #include <cstdint>
@@ -113,6 +112,27 @@ bool unsat( const cnf& form ) {
             solver.add( lit );
         }
         solver.add(0);
+    }
+
+    int res = solver.solve();
+    return res == 20;
+}
+
+
+/**
+     Checker wether a cnf-formula is a tautology using Cadical.
+     @param cnf, a cnf.
+     \return true if tautology, false if not.
+  */
+bool taut( const cnf& form ) {
+    CaDiCaL::Solver solver;
+    solver.set( "factor", 0 );
+    solver.set( "factorcheck", 0 );
+
+    for( auto& clause : form ) {
+        for( auto& lit : clause ) {
+            solver.add( -lit );
+        }
     }
 
     int res = solver.solve();
@@ -574,8 +594,11 @@ bool proof_system(  int                             i_root,
     }
 
     else if( l_root.type == Node::ONE ) {
-        if( !l_label.empty() )
-            error( "True node not satisfied: ID: " + std::to_string( i_root ) + ", clauses: \n" + to_string( l_root.label ) );
+        if( !l_label.empty() ) {
+            if( !taut( l_label ) )
+                error( "True node not satisfied: ID: " + std::to_string( i_root ) + 
+                        ", clauses: \n" + to_string( l_root.label ) );
+        }
         return true;
     }
 
@@ -603,6 +626,8 @@ int main( int argc,  char **argv )
         return 1;
     }
 
+    clock_t start = clock();
+
     std::vector<std::string> lines;
     cnf cnf;
     std::unordered_map<int, Node> nodes;
@@ -624,11 +649,19 @@ int main( int argc,  char **argv )
         cnf.push_back( parse_clause( line ) );
     }
 
+    clock_t mid = clock();
+    std::cout << "Preprocessing time: " << (float) ( mid - start ) / CLOCKS_PER_SEC << " seconds" << std::endl;
+
+
     // Actual application of the proof system
     nodes[root].label = cnf;
     std::cout << "Starting proof system" << std::endl;
     proof_system( root, nodes );
     std::cout << "Success!" << std::endl;
+
+    clock_t end = clock();
+    std::cout << "Proof time: " << (float)( end - mid ) / CLOCKS_PER_SEC << " seconds"  << std::endl;
+    std::cout << "Total time: " << (float)( end - start ) / CLOCKS_PER_SEC << " seconds" << std::endl;
 
     return 0;
 }
