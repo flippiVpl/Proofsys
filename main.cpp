@@ -554,7 +554,7 @@ bool proof_system(  int                             i_root,
                     std::cerr << lit << " ";
                 }
                 std::cerr << std::endl << "With mother label: " << to_string( l_root.label ) << std::endl;
-                std::cerr << "Unsatisfied: " << (l_root.label.size() == 1 && l_root.label[0].size() == 0) << std::endl;
+                std::cerr << "Unsatisfiable: " << (l_root.label.size() == 1 && l_root.label[0].size() == 0) << std::endl;
                 std::cerr << std::endl << "With children labels: " << std::endl;
                 for( int i=0; i < l_root.children.size(); i++ ) {
                     std::cerr << "child " << i+1 << " :" << std::endl;
