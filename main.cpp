@@ -155,11 +155,11 @@ std::vector<Arc> filter_arcs(   std::vector<Arc>    i_arcs,
             std::remove_if( tmp.lits.begin(), tmp.lits.end(),
                 [&](int lit)
                 {
-                    // Case 1: Literal in arch -> erase
+                    // Case 1: Literal in arc -> erase
                     if( lit ==  var )
                         return true;
 
-                    // Case 2: Negation in arch -> erase whole arch
+                    // Case 2: Negation in arc -> erase whole arc
                     if( lit == -var ) {
                         drop = true;
                         return true;
